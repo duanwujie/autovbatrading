@@ -29,6 +29,8 @@ public K1243Market
 
 public DBConnection		'''数据库连接'''
 
+public SYSOpenRate		'''开仓费率'''
+
 
 Set K1Array = CreateObject("Stock.ArrayString")
 Set K12Array = CreateObject("Stock.ArrayString")
@@ -117,11 +119,13 @@ End Function
 
 
 Function getOpenRate()
-
-
-	
-
-
+	Dim rate
+	strSQL = "SELECT * FROM sys_rate"
+	Set rs = CreateObject("ADODB.Recordset")
+	rs.Open strSQL, DBConnection, , , adCmdText
+	rate = rs.Fields("open_rate")
+	rs.Close
+	getOpenRate = rate
 End Function
 
 '''该函数用于检查执行环境，看执行环境是否准许执行
@@ -136,10 +140,15 @@ Function envirnmentCheck()
 	''''
 	
 	
+	
 	'''读取费率
+	openConnection()
+	SYSOpenRate = getOpenRate()
+	closeConnection()	
 	
+	logString("[ 提示: ] 开仓费率:" & SYSOpenRate)
 	
-	
+	 
 
 
 End Function
@@ -337,9 +346,11 @@ Function runK123()
 		Market = K12Market.GetAt(i)
 		Set Report1  = marketdata.GetReportData(Code,Market)
 		if K123Signal(Code,Market)=1 then
-			K123Array.AddBack(Report1.Label)
-			K123Market.AddBack(Report1.MarketName)
-			debugString(Report1.Label & "  --123")
+			K123Array.AddBack(Code)
+			K123Market.AddBack(Market)
+			openConnection()
+			insertConditionTable Code,Market,"123",Time,Date
+			closeConnection()
 		end if
 	next
 	runK123 = K123Array.Count
@@ -385,9 +396,11 @@ Function runK124()
 		Market = K12Market.GetAt(i)
 		Set Report1  = marketdata.GetReportData(Code,Market)
 		if K124Signal(Code,Market)=1 and exclude123(Code)=1 then  '''这里排除123重复的
-			K124Array.AddBack(Report1.Label)
-			K124Market.AddBack(Report1.MarketName)
-			debugString(Report1.Label & "  --124")
+			K124Array.AddBack(Code)
+			K124Market.AddBack(Market)
+			openConnection()
+			insertConditionTable Code,Market,"124",Time,Date
+			closeConnection()
 		end if
 	next
 	runK124 = K124Array.Count
@@ -401,9 +414,11 @@ Function runK134()
 		Market = K13Market.GetAt(i)
 		Set Report1  = marketdata.GetReportData(Code,Market)
 		if K134Signal(Code,Market)=1 and exclude124(Code)=1 then   '''这里排除124重复的
-			K134Array.AddBack(Report1.Label)
-			K134Market.AddBack(Report1.MarketName)
-			debugString(Report1.Label & "  --134")
+			K134Array.AddBack(Code)
+			K134Market.AddBack(Market)
+			openConnection()
+			insertConditionTable Code,Market,"134",Time,Date
+			closeConnection()
 		end if
 	next
 	runK134 = K134Array.Count
@@ -425,13 +440,15 @@ Function firstBuy()
 	if count>0 then			'''有股票可买才进行操作
 		expendable_cash = Order.Account2(3,"")
 		expendable_cash = expendable_cash / 2   '''这里刚开始只用所有资金的1半，后面可以自动配置
+		
+		expendable_cash = expendable_cash*(1-SYSOpenRate)   '''分成一半后，去掉手续费
 		each_stock_cash = expendable_cash / count  '''计算每只股票可用资金
 		
 		for i=0 to count-1
 			Code = K123Array.GetAt(i)
 			Market = K123Market.GetAt(i)
 			set Report1 = marketdata.GetReportData(Code,Market)
-			stock_count  = each_stock_cash / Report1.NewPrice
+			stock_count  = each_stock_cash / (Report1.NewPrice)  '''这里要算上费率
 			stock_count = Int(Int(stock_count)/100)*100    '''转换成标准手数
 			
 			rs = Order.Buy(1,stock_count,Report1.NewPrice,0,Code,Market,"",0)
@@ -479,8 +496,12 @@ Function secondBuy()
 	if count>0 then			'''有股票可买才进行操作
 		logString("[ 提示: ] 第4根K线有" & count & "只股票购买")
 		expendable_cash = Order.Account2(3,"")
+		
+		expendable_cash = expendable_cash*(1-SYSOpenRate)   '''去掉手续费
+		
 		expendable_cash = expendable_cash  '''将所有资金用于购买股票
 		each_stock_cash = expendable_cash / count  '''计算每只股票可用资金
+		logString("each_stock_cash:" & each_stock_cash & " openrate:" & SYSOpenRate) 
 	else
 		logString("[ 提示: ] 第4根K线没有股票购买")
 	end if
@@ -661,6 +682,11 @@ End Sub
 Sub B2()
 	K124Array.AddBack("000425")
 	K124Market.AddBack("SZ")
+	
+	openConnection()
+	SYSOpenRate = getOpenRate()
+	closeConnection()
+	
 	secondBuy()
 	removeStage2()
 End Sub
@@ -820,14 +846,18 @@ End Function
 '''订单事件监听，当多单买入成功后触发该事件
 Sub ORDER_OrderStatusEx(OrderID, Status, Filled, Remaining, Price, Code, Market, OrderType, Aspect, Kaiping)
 
-	debugString(Status & ":" & Filled & ":"  & Remaining & ":"  & Price & ":"  & Code & ":"  & Market & ":" & OrderType & ":"  & Aspect & ":"  & KaiPing)
-	if(Aspect =1 and Status="Filled") then '''这里多单已经全部成交，更新数据库
+	'''debugString(Status & ":" & Filled & ":"  & Remaining & ":"  & Price & ":"  & Code & ":"  & Market & ":" & OrderType & ":"  & Aspect & ":"  & KaiPing)
+	if(Aspect = 0 and Kaiping=0 and Status="Filled") then '''这里多单已经全部成交，更新数据库
+		openConnection()
 		insertOpenedTable Code,Market,Price,Filled,Time,Date
-	elseif (Aspect =0 and Status="Filled") then '''这里已经平了多单，更新数据库
+		closeConnection()
+	elseif (Aspect = 1 and Kaiping=0 and Status="Filled") then '''这里已经平了多单，更新数据库
 			hp = getHistoryPrice(Code)
 			hc = getCondtion2(Code)
 			if hp>0 then
+				openConnection()
 				insertClosedTable Code,Market,hp,Price,Filled,Price-hp,Time,Date,hc
+				closeConnection()
 			end if
 	end if
 End Sub
