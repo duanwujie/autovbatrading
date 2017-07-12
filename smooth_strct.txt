@@ -1,3 +1,11 @@
+{
+	命名规则说明：
+		系统函数，以及关键字全部使用大写
+		自定义变量使用：
+		
+}
+
+
 
 RUNMODE:0;{逐K计算模式}
 
@@ -214,7 +222,7 @@ else begin								{不是最后一个周期:以限价方式进行做空或者做多}
 	平多:Sell(doCloseLong=1 ,0,LIMITR,open);
 	//平空:SellShort(doCloseShort=1,0,LIMITR,Open);
 	
-	
+	{当关闭多单时，计算多单的利润}
 	if  doCloseLong then
 	begin 
 		if NUMPROFIT(1)<=0 then
