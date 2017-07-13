@@ -1,262 +1,186 @@
-{
+{--------------------------------------------------------------------------------
 	命名规则说明：
 		系统函数，以及关键字全部使用大写
-		自定义变量使用：
-		
-}
-
-
-
-RUNMODE:0;{逐K计算模式}
-
-input:手数(1,1,10000,1),开仓百分数(0,0,100,1);
-input:开仓过滤乘数(60,1,1000,1);{过滤器标准差百分比，单位 1/100}
-input:平仓过滤乘数(50,0,1000,1);{出场过滤器标准差百分比，单位 1/100}
-input:N(1,0,40,1); 				{计算AMA最大值或者最小值的区间范围，默认为1}
-
-
-VARIABLE:cntKD=0;{开多单的数量}
-VARIABLE:cntKK=0;{开空单的数量}
-
-VARIABLE:cntLoss=0;{连续亏损的单子数量}
-VARIABLE:cntProfit=0;{连续盈利的单子数量}
-
-VARIABLE:totalLongProfit=0;{多单毛利润}
-VARIABLE:totalLongLoss=0;{多单毛亏}
-VARIABLE:realLongProfit=0;{多单总的净利润}
-
-VARIABLE:totalShortProfit=0;{空单毛利润}
-VARIABLE:totalShortLoss=0;{空单毛亏}
-VARIABLE:realShortLoss=0;{空单总的净利润}
-
-VARIABLE:allProfit=0;{总的净利润}
-
-VARIABLE:longOpenTypes=0;{开仓类型：1为第一类开仓，2为第二类2开仓，3为第三类开仓}
-VARIABLE:longCloseTypes=0;
-
-
-
-VARIABLE:confirm_close = 0;{确认K的收盘价}
-VARIABLE:confirm_open = 0;{确认K的开盘价}
-VARIABLE:confirm_high = 0;{确认K的最高价}
-VARIABLE:confirm_low = 0;{确认K的最低}
-
-
-
-VARIABLE:update_confirm_close=0;
-VARIABLE:update_confirm_open=0;
-VARIABLE:update_confirm_high=0;
-VARIABLE:update_confirm_low=0;
-
-
-
-
-
-
-
-update_confirm_close:=REF(C,1);
-update_confirm_open:=REF(O,1);
-update_confirm_high:=REF(H,1);
-update_confirm_low:=REF(L,1);
-
-
-
-
-
-
-
-//写库用，实盘不用
-
-VARIABLE:ama_flag=0;
-
-
-
-Fil_open:=开仓过滤乘数/100;
-Fil_close:=平仓过滤乘数/100;
-E_i:=0.8;
-
-//L1:= 0.1375;/////Fix
-//L2:= 0.05;/////Fix
-
-Lots:=手数;			{开仓百分比大于0，则以最大可开仓手数的百分比进行开仓}
-if TACCOUNT(20)>0 	{当前可用流动资金}
-then 
-	vAsset:=TACCOUNT( 20); 
-else 
-	vAsset:=ASSET;   {返回客户交易账户的平仓净资产}
-UsableAsset:=vAsset,nodraw;
-
-
-max_slots:=INTPART(UsableAsset/( MULTIPLIER*Close*TACCOUNT(41) )); {max_slots:最大开仓手数 = 可用净资产/(品种的乘数*收盘价*多头保证金率)}
-IF 开仓百分数>0 THEN begin
-	max_slots:= INTPART(max_slots*开仓百分数/100);
-	if max_slots>10000 then begin 
+		自定义变量使用：使用小写和大写的组合方式进行命名
+	参数说明:	
+----------------------------------------------------------------------------------}
+RUNMODE:0;						{逐K计算模式}
+{-------------------------------|输入参数|----------------------------------------}
+INPUT:手数(1,1,10000,1);		{表示以指定手数进行购买,只有在开仓百分数时有效}
+INPUT:开仓百分数(0,0,100,1);    {如果开仓百分比大于0，则表示最大可开仓位的百分比进行购买，此时变量 =手数= 无效}
+INPUT:开仓过滤乘数(60,1,1000,1);{过滤器标准差百分比，单位 1/100}
+INPUT:平仓过滤乘数(50,0,1000,1);{出场过滤器标准差百分比，单位 1/100}
+INPUT:N(1,0,40,1); 				{计算AMA最大值或者最小值的区间范围，默认为1}
+{-------------------------------|利润相关统计变量|--------------------------------}
+VARIABLE:cntKD=0;               {开多单的数量}
+VARIABLE:cntKK=0;               {开空单的数量}
+VARIABLE:cntLoss=0;             {连续亏损的单子数量}
+VARIABLE:cntProfit=0;           {连续盈利的单子数量}
+VARIABLE:totalLongProfit=0;     {多单毛利润}
+VARIABLE:totalLongLoss=0;       {多单毛亏}
+VARIABLE:realLongProfit=0;      {多单总的净利润}
+VARIABLE:totalShortProfit=0;    {空单毛利润}
+VARIABLE:totalShortLoss=0;      {空单毛亏}  
+VARIABLE:realShortLoss=0;       {空单总的净利润}
+VARIABLE:allProfit=0;           {总的净利润}
+{-------------------------------|帐户相关变量|------------------------------------}
+VARIABLE:Lots=0;				{实际开仓手数}
+VARIABLE:maxLots=0;             {最大可开仓手数}
+VARIABLE:usableAsset=0;			{可用资金}
+{-------------------------------|策略相关变量|------------------------------------}
+VARIABLE:longOpenTypes=0;       {多单开仓类型：1为第一类开仓，2为第二类2开仓，3为第三类开仓}
+VARIABLE:longCloseTypes=0;		{多单平仓类型: 1为第一类平仓，2为第二类2平仓，3为第三类平仓}
+VARIABLE:lconClose=0;           {确认K的收盘价}
+VARIABLE:lconOpen=0;            {确认K的开盘价}
+VARIABLE:lconHigh=0;            {确认K的最高价}
+VARIABLE:lconLow=0;          {确认K的最低价}
+VARIABLE:lproClose=0;	{潜在的更新K的收盘价}
+VARIABLE:lproOpen=0;	    {潜在的更新K的开盘价}
+VARIABLE:lproHigh=0;	    {潜在的更新K的最高价}
+VARIABLE:lproLow=0;	    {潜在的更新K的最低价}
+VARIABLE:lproState=0;			{潜在K是否已经被更新了，如果被更新了，则为1否则为0}
+VARIABLE:initPreviousClose=0;	{开仓时前一根K线的收盘价}
+VARIABLE:initPreviousOpen=0;    {开仓时前一根K线的开盘价}
+VARIABLE:initPreviousHigh=0;    {开仓时前一根K线的最高价}
+VARIABLE:initPreviousLow=0;     {开仓时前一根K线的最低价}
+{-------------------------------|初始化帐户相关变量|-------------------------------}
+Lots:=手数;                     {开仓百分比大于0，则以最大可开仓手数的百分比进行开仓}
+IF TACCOUNT(20)>0 THEN 
+	usableAsset:=TACCOUNT(20);  {当前可用流动资金}
+ELSE 
+	usableAsset:=ASSET;         {返回客户交易账户的平仓净资产}
+                                {根据开仓百分比，计算实际开仓手数}								
+maxLots:=INTPART(usableAsset/( MULTIPLIER*CLOSE*TACCOUNT(41) )); {最大开仓手数 = 可用净资产/(品种的乘数*收盘价*多头保证金率)}
+IF 开仓百分数>0 THEN BEGIN
+	maxLots:= INTPART(maxLots*开仓百分数/100);
+	IF maxLots>10000 THEN BEGIN 
 		Lots:=10000;
-	end
-	else if max_slots>0 then begin
-		Lots:=max_slots;
-	end
-end
+	END
+	ELSE IF maxLots>0 THEN BEGIN
+		Lots:=maxLots;
+	END
+END
+{-------------------------------|初始化交易策略相关变量|-------------------------------}
+initPreviousClose:=REF(C,1);
+initPreviousOpen:=REF(O,1);
+initPreviousHigh:=REF(H,1);
+initPreviousLow:=REF(L,1);
 
-可开:=Lots;{否则以指定手数进行开仓}
 
-CYC:=BARSLAST(DATE<>REF(DATE,1))+1;
-if cyc=1 then BEGIN	
+
+filterOpen:=开仓过滤乘数/100;	{开仓过滤乘数转换成百分比}
+filterClose:=平仓过滤乘数/100;  {平仓过滤乘数转换成百分比}
+e_i:=0.8;
+
+{L1:= 0.1375;}
+{L2:= 0.05;}
+
+Cycle:=BARSLAST(DATE<>REF(DATE,1))+1;
+if Cycle=1 then BEGIN	
 	cntKD:=0;
 	cntKK:=0;
 end
-if barpos>=54 then 
-	ss22:=11;
 
-//EV
+
 DMA10:=C-REF(C,10);
-DMA1:=C-REF(C,1);
-SumDov1:=SUM(ABS(DMA1),15);
-EV:=ABS(DMA10/SumDov1),LINETHICK2;
+SumDov1:=SUM(ABS(C-REF(C,1)),15);{15周期内DMA-shift1的和}
+EV:=ABS(DMA10/SumDov1),LINETHICK2;{计算EV}
 
-{if Barpos>=552 then  sss:=222;}
+AMA:=MD(CLOSE,10,0.328,0.05);   {AMA值}
+DiffAMA:=AMA-REF(AMA,1);		{Current AMA - Previous AMA}
+LAMA:=REF(LLV(AMA,N),1),NODRAW; {N个周期内的最小AMA值}
+HAMA:=REF(LLV(AMA,N),1),NODRAW; {N个周期内的最大AMA值}
+Filt:=STD(DiffAMA,30);		    {30周期内DiffAMA的总体标准差}
+filterIn :=filterOpen*Filt;
+filterOut:=filterClose*Filt;
+{-----------------------------策略逻辑开始-----------------------------------------------------------}
+condKD := DiffAMA>0 and AMA-LAMA>filterIn;   {开多条件:当前K线的AMA大于前一根K线的AMA，并且当前K线的AMA与N周期内的AMA最低点比较，大于一定范围(Fil_in)}
+condPD := DiffAMA<0 and HAMA-AMA>filterOut;  {平多条件:当前K线的AMA小于前一根K线的AMA，并且当前K线的AMA与N周期内的AMA最高点比较，小于一定范围(Fil_out)}
+condKK := DiffAMA<0 and HAMA-AMA>filterIn;   {开空条件:当前K线的AMA小于前一根K线的AMA，并且当前K线的AMA与N周期内的AMA最高点，小于一定范围(Fil_in)}
+condPK := DiffAMA>0 and AMA-LAMA>filterOut;  {平空条件:当前K线的AMA大于前一根K线的AMA，并且当前K线的AMA与N周期内的AMA最低点比较，大于一定范围(Fil_out)}
 
-
-FMA:=MD(CLOSE,10,0.328,0.05),COLORYELLOW;
-FMAs:=MD(CLOSE,10),COLORRED;
-
-{
-FMA:MD(CLOSE,10,0.328,0.05),COLORYELLOW;
-FMAs:MD(CLOSE,10),COLORRED;
-}
-
-DiffAMA1:=FMA-REF(FMA,1);		{Current AMA - Previous AMA}
-DiffAMA2:=FMAs-REF(FMAs,1);     {Current AMAs - Previous AMAs}
-
-LAMA1:=REF(LLV(FMA,N),1),NODRAW;{N个周期内的最小AMA值}
-HAMA1:=REF(LLV(FMA,N),1),NODRAW;{N个周期内的最大AMA值}
-
-Filt1:=STD(DiffAMA1,30);
-Filt2:=0.1*STD(DiffAMA2,20);
-
-Fil_in :=Fil_open*Filt1;
-Fil_out:=Fil_close*Filt1;
+doLong:=ALL(REF(condKD,1)=1,2) AND HOLDING<=0 AND REF(C,1)>REF(O,1) AND longCloseTypes<>1;	{第一类开多条件: 当前K线的前两根K线都满足condKD并且净多小于等于0，且之前没有进行过第一类开多}
+doCloseLong:= REF(condPD,1)=1 AND HOLDING>0;								                {第一类多单平多条件：}
+doShort:=ALL(REF(condKK,1)=1,2) AND HOLDING>=0 AND REF(C,1)<REF(O,1);	                    {第一类空单开空条件: 当前K线的前两根K线都满足condKK并且净多大于等于0}
+doCloseShort:=REF(condPK,1)=1 AND HOLDING<0;							                    {第一类空单平空条件: }
 
 
-condKD := DiffAMA1>0 and FMA-LAMA1>Fil_in;	{开多条件:当前K线的AMA大于前一根K线的AMA，并且当前K线的AMA与N周期内的AMA最低点比较，大于一定范围(Fil_in)}
-condPD := DiffAMA1<0 and HAMA1-FMA>Fil_out; {平多条件:当前K线的AMA小于前一根K线的AMA，并且当前K线的AMA与N周期内的AMA最高点比较，小于一定范围(Fil_out)}
-condKK := DiffAMA1<0 and HAMA1-FMA>Fil_in;  {开空条件:当前K线的AMA小于前一根K线的AMA，并且当前K线的AMA与N周期内的AMA最高点，小于一定范围(Fil_in)}
-condPK := DiffAMA1>0 and FMA-LAMA1>Fil_out; {平空条件:当前K线的AMA大于前一根K线的AMA，并且当前K线的AMA与N周期内的AMA最低点比较，大于一定范围(Fil_out)}
-
-{-----------------------------画线-----------------------------------------------------------}
+{---------------------如果是开了多单，则对多单的止损价，进行更新-------------------------------------}
 
 
-
-Polyline(1,	 
-		FMA,   
-		IF(condKD or condKK,if(condKD,ColorMagenta,ColorBlue),if(DiffAMA1>0,ColorMagenta,ColorBlue) ),  
-		IF(condKD OR condKK,3,1) 
-		);	
-
-
-
-if condKD=1 then ama_flag:=1;//AMA开多标志	
-if condKK=1 then ama_flag:=3;//AMA开空标志
-	
-if ama_flag=2 or ama_flag=4 then 
-begin
-	if condKD=1 then ama_flag:=1;
-	if condKK=1 then ama_flag:=3;
-end
-
-{drawline(ama_flag=1,open,ama_flag=3,open,0,ColorRed,1,vtdot);}
-{drawline(ama_flag=3,open,ama_flag=1,open,0,ColorGreen,1,vtdot);}
-{-----------------------------画线结束-----------------------------------------------------------}
-
-
-
-态:ama_flag;
-	
-
-doLong:= all(ref(condKD,1)=1,2) and holding<=0 and ref(C,1)>ref(O,1) and longCloseTypes<>1;	{开多条件,并且前一单平多条件不是第一类平多}
-doCloseLong:=ref(condPD,1)=1 and holding>0;								{平多条件}
-doShort:=all(ref(condKK,1)=1,2) and holding>=0 and ref(C,1)<ref(O,1);	{开空条件}
-doCloseShort:=ref(condPK,1)=1 and holding<0;							{平空条件}
-
-
-
-{当前的收盘价小于了确认K的最低价,并且持有多单}
-
-
-
-{当前一根K线为阳线，并且持有多仓,则该K先为潜在的UP更新,但这里只记录下潜在的UP更新,并不立刻更新}
-
-if C<confirm_low and holding>0 then
-begin
-	doCloseLong:=1; {进行平多操作}
-	longCloseTypes:=1;{进行第一类平仓}
-end
-
-{发现满足多单UP跟新条件1后，进行up跟新}
-if (holding>0) and (C>confirm_close) and (C>O)  then
-begin 
-	confirm_close:=UPDATE_CONFIRM_CLOSE;
-	confirm_open:=UPDATE_CONFIRM_OPEN;
-	confirm_low:=UPDATE_CONFIRM_LOW;
-	confirm_high:=UPDATE_CONFIRM_HIGH;
-end
 
 
 
 
 //ER的平仓条件
-if E_i>0 then 
+IF e_i >0 THEN 
 BEGIN
 	doCloseLong:=doCloseLong or (EV>=E_i and holding>0);
 	doCloseShort:=doCloseShort or (EV>=E_i and holding<0);
 END
 
+
+IF (C<lconLow) AND (HOLDING>0) THEN
+BEGIN
+	doCloseLong:=1; {进行平多操作}
+	longCloseTypes:=1;{进行第一类平仓}
+END
+
+
 //执行动作
-if ISLASTBAR then begin					
+IF ISLASTBAR THEN BEGIN					
 	平多s:Sell(doCloseLong=1,0,marketr);{最后一个周期:按照市价进行做空或者做多}
 	平空s:SellShort(doCloseShort=1,0,marketr);
 	开空s:BUYShort(doShort=1,Lots,marketr);
 	开多s:BUY( doLong=1,Lots,marketr);
-end        
-else begin								{不是最后一个周期:以限价方式进行做空或者做多}
-	平多:Sell(doCloseLong=1 ,0,LIMITR,open);
+END        
+ELSE BEGIN								{不是最后一个周期:以限价方式进行做空或者做多}
+	平多:Sell(doCloseLong=1 ,0,LIMITR,open);		
 	//平空:SellShort(doCloseShort=1,0,LIMITR,Open);
 	
-	{当关闭多单时，计算多单的利润}
-	if  doCloseLong then
-	begin 
-		if NUMPROFIT(1)<=0 then
-		begin
+    {关闭多单时，计算多单的利润}
+	IF  doCloseLong THEN BEGIN 
+		IF NUMPROFIT(1)<=0 THEN BEGIN
 			totalLongLoss:= totalLongLoss + NUMPROFIT(1);
-		end
-		if NUMPROFIT(1)>=0 then
-		begin 
+		END
+		IF NUMPROFIT(1)>=0 THEN BEGIN 
 			totalLongProfit:= totalLongProfit + NUMPROFIT(1);
-		end 
+		END 
 		realLongProfit:= realLongProfit + NUMPROFIT(1);
-	end 
-	
-
+		
+		{多单关闭后，多单潜在的的确认K，以及确认K的变量都应该复位，以便下次开多单时重复使用}
+		
+		
+		lproClose:=0;
+		lproOpen:=0;
+		lproHigh:=0;
+		lproLow:=0;
+		lconClose:=0;
+		lconOpen:=0;
+		lconHigh:=0;
+		lconLow:=0;
+		
+	END 
 	{计算连续亏损的个数}
-	if (doCloseLong or doCloseShort) and NUMPROFIT(1)<=0  then 
+	IF (doCloseLong OR doCloseShort) AND NUMPROFIT(1)<=0  THEN 
 		cntLoss:=cntLoss+1;		
-	else  if (doCloseLong or doCloseShort) and NUMPROFIT(1)>0 then 
+	ELSE  IF (doCloseLong OR doCloseShort) AND NUMPROFIT(1)>0 THEN 
 		cntLoss:=0;
 	//开空:BUYShort(doShort=1,Lots,LIMITR,Open);
-	开多:BUY(doLong=1,Lots,LIMITR,Open);
+	一类开多:BUY(doLong=1,Lots,LIMITR,Open);
 	
 	{如果这里进行了开多单或者K空单的操作，这里记录下确认K的价格，用于后面移动止损}
-	IF (doShort OR doLong) THEN    {注意这里开仓后，当前K线为动作K先，因此前一根K线为确认K}
+	IF doLong AND longOpenTypes=0 THEN    {注意这里开仓后，当前K线为动作K线，因此前一根K线为确认K}
 	BEGIN								
-		confirm_close:= UPDATE_CONFIRM_CLOSE;
-		confirm_open:= UPDATE_CONFIRM_OPEN;
-		confirm_high:= UPDATE_CONFIRM_HIGH;
-		confirm_low:= UPDATE_CONFIRM_LOW;
-		openTypes:= 1;
+		lconClose:=initPreviousClose;
+		lconOpen:=initPreviousOpen;
+		lconHigh:=initPreviousHigh;
+		lconLow:=initPreviousLow;
+		longOpenTypes:= 1;
 	END
 	
 	{后面开空单或者平多单，所以多单的开仓状态清0}
-	if doShort or doCloseShort then
+	if doShort or doCloseShort THEN
 	begin
 		longOpenTypes:= 0;
 		longCloseTypes:= 0;
@@ -265,18 +189,49 @@ end
 
 
 
-{连亏:cntLoss,nodraw;}
-确低:confirm_low,COLORYELLOW;
-多单毛利:totalLongProfit,COLORYELLOW;
-多单毛亏:totalLongLoss,COLORYELLOW;
-多单净利:realLongProfit,COLORYELLOW;
 
-if doShort then cntKK:=cntKK+1;
-if doLong then cntKD:=cntKD+1;
+
+{-----------------------------画线-----------------------------------------------------------}
+Polyline(1,AMA,   IF(condKD or condKK,if(condKD,ColorMagenta,ColorBlue),IF(DiffAMA>0,ColorMagenta,ColorBlue) ),  IF(condKD OR condKK,3,1) );	
+{drawline(ama_flag=1,open,ama_flag=3,open,0,ColorRed,1,vtdot);}
+{drawline(ama_flag=3,open,ama_flag=1,open,0,ColorGreen,1,vtdot);}
+
+
+{连亏:cntLoss,nodraw;}
+
+多单毛利:totalLongProfit,COLORYELLOW,NODRAW;
+多单毛亏:totalLongLoss,COLORYELLOW,NODRAW;
+多单净利:realLongProfit,COLORYELLOW,NODRAW;
+
+IF doShort THEN cntKK:=cntKK+1;
+IF doLong THEN cntKD:=cntKD+1;
 
 
 	
+{开多单后发现当前价格大于确认K的收盘价，并且为阳线，因此这根K线一定是潜在的L'}
+IF (HOLDING>0) AND (initPreviousClose>initPreviousOpen) AND (initPreviousClose>lproClose) THEN
+BEGIN 
+	lproClose:=initPreviousClose;
+	lproOpen:=initPreviousOpen;
+	lproHigh:=initPreviousHigh ;
+	lproLow:=initPreviousLow;
+	lproState:=1;
+END
 
+
+{开多单后发现，潜在的L’已经更新，此时判断是否移动}
+IF (HOLDING>0) AND (C>lproClose) AND (C>O) AND (lproState=1) THEN
+BEGIN
+	lconClose:=lproClose;        
+	lconOpen:=lproOpen;         
+	lconHigh:=lproHigh;        
+	lconLow:=lproLow;         
+END
+
+
+
+备用低点:lproLow,COLORCYAN,LINEDASHDOT;
+确认低点:lconLow,COLORYELLOW,LINEDASHDOT;
 
 
 ///发送通知消息
