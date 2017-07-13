@@ -22,6 +22,10 @@ public K1243Market
 
 
 
+
+
+
+
 '''Set strNotice = "[ 提示: ]"
 '''Set strWarning= "[ 警告: ]"
 '''Set strError  = "[ 错误: ]"
@@ -30,6 +34,9 @@ public K1243Market
 public DBConnection		'''数据库连接'''
 
 public SYSOpenRate		'''开仓费率'''
+
+
+
 
 
 Set K1Array = CreateObject("Stock.ArrayString")
@@ -127,6 +134,15 @@ Function getOpenRate()
 	rs.Close
 	getOpenRate = rate
 End Function
+
+
+Function getOpenRateWithConnection()
+	openConnection()
+	SYSOpenRate = getOpenRate()
+	closeConnection()
+End Function
+
+
 
 '''该函数用于检查执行环境，看执行环境是否准许执行
 Function envirnmentCheck()
@@ -435,6 +451,11 @@ Function firstBuy()
 	
 	Dim	stock_count			'''每只股票可买的股票数量
 	
+	'''如果开仓费率读取失败则使用默认的费率
+	getOpenRateWithConnection()
+	if IsEmpty(SYSOpenRate) then
+		SYSOpenRate = 0.01
+	end if
 	
 	count  = K123Array.Count
 	if count>0 then			'''有股票可买才进行操作
@@ -462,6 +483,10 @@ Function firstBuy()
 	
 
 End Function
+
+
+
+
 
 
 Function emailSender(Subs,Msg)
@@ -492,6 +517,15 @@ Function secondBuy()
 	count = count1+count2
 	
 	debugString(count & ":" & count1 & ":" & count2)
+	
+	
+	'''如果开仓费率读取失败则使用默认的费率
+	getOpenRateWithConnection()
+	if IsEmpty(SYSOpenRate) then
+		SYSOpenRate = 0.01
+	end if
+	
+	
 	
 	if count>0 then			'''有股票可买才进行操作
 		logString("[ 提示: ] 第4根K线有" & count & "只股票购买")
@@ -641,6 +675,15 @@ Sub K0()
 	envirnmentCheck()
 End Sub
 
+Sub KX()
+
+	if IsEmpty(SYSOpenrate) then
+		SYSOpenrate = 0.01
+	end if
+	logString("Openrate :" & SYSOpenrate)
+	
+End Sub
+
 '''用于调试1条件
 Sub K1()
 	Count = runK1()
@@ -761,21 +804,21 @@ Sub APPLICATION_Timer(ID)
 		
 		closeYestodayOrder()			'''关闭昨天开的多单
 		clearOpenedTable()              '''多单关闭后将开单的数据清空
-	elseif cdate(time)=cdate("10:45:01") then  '''在9.45分的时候筛选出全部满足1的股票
+	elseif cdate(time)=cdate("09:45:01") then  '''在9.45分的时候筛选出全部满足1的股票
 		count = runK1()
 		if count = 0 then
 			logString("[ 提示: ] 今天早盘没有可选的股票进行交易")
 		else 
 			logString("[ 提示: ] 筛选出了合条件[1]的股票 " & count & "只")
 		end if
-    elseif cdate(time)=cdate("10:47:01") then  '''在10.00分的时候筛选出全部满足12的股票
+    elseif cdate(time)=cdate("10:00:01") then  '''在10.00分的时候筛选出全部满足12的股票
     	count = runK12()
     	if count = 0 then
 			logString("[ 提示: ] 没有符合条件[12]的股票")
 		else 
 			logString("[ 提示: ] 筛选出了合条件[12]的股票 " & count & "只")
 		end if
-    elseif cdate(time)=cdate("10:48:01") then  '''在10.15分的时候筛选出全部满足13,123的股票,并检查有没有需要购买的股票，如果有则以市价买入
+    elseif cdate(time)=cdate("10:15:01") then  '''在10.15分的时候筛选出全部满足13,123的股票,并检查有没有需要购买的股票，如果有则以市价买入
         count = runK123()
         if count = 0 then
 			logString("[ 提示: ] 没有符合条件[123]的股票")
@@ -789,7 +832,7 @@ Sub APPLICATION_Timer(ID)
 		else 
 			logString("[ 提示: ] 筛选出了合条件[13]的股票 " & count & "只")
 		end if
-    elseif cdate(time)=cdate("10:49:01") then  '''在10.30分的时候选出满足124，134的股票后，并检查有没有需要购买的股票，如果有则以市价买入
+    elseif cdate(time)=cdate("10:30:01") then  '''在10.30分的时候选出满足124，134的股票后，并检查有没有需要购买的股票，如果有则以市价买入
     	count = runK124()
     	if count = 0 then
 			logString("[ 提示: ] 没有符合条件[124]的股票")
@@ -803,7 +846,7 @@ Sub APPLICATION_Timer(ID)
 			logString("[ 提示: ] 筛选出了合条件[134]的股票 " & count & "只")
 		end if
     	secondBuy()
-    elseif cdate(time)=cdate("10:50:00") then  '''这里检查是否已经购买完成，如果购买完成，释放该释放的东西，并且关闭数据库
+    elseif cdate(time)=cdate("10:45:00") then  '''这里检查是否已经购买完成，如果购买完成，释放该释放的东西，并且关闭数据库
     	logString("[ 提示: ] 清理生成的临时数据")
     	removeStage1()
     	removeStage2()
@@ -861,4 +904,5 @@ Sub ORDER_OrderStatusEx(OrderID, Status, Filled, Remaining, Price, Code, Market,
 			end if
 	end if
 End Sub
+
 
