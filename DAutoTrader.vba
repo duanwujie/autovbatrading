@@ -91,11 +91,11 @@ End Function
 
 '''用于选股时日志输出
 Function debugString(String)
-	call Document.DebugFile("C:\Weisoft Stock(x64)\Log\AutoTrader.TXT",String,1)
+	call Document.DebugFile("D:\Weisoft Stock(x64)\Log\AutoTrader.TXT",String,1)
 End Function
 
 Function logString(String)
-	call Document.DebugFile("C:\Weisoft Stock(x64)\Log\LogAutoTrader.TXT",String,1)
+	call Document.DebugFile("D:\Weisoft Stock(x64)\Log\LogAutoTrader.TXT",String,1)
 End Function
 
 '''第1阶段，只是将123购买的删除
@@ -647,7 +647,7 @@ Function openConnection()
 	if IsEmpty(DBConnection) then
 		set DBConnection=CreateObject("ADODB.connection")
 		DBConnection.Provider="Microsoft.ACE.OLEDB.12.0"
-		DBConnection.Open "C:\Weisoft Stock(x64)\traderinfo.mdb"
+		DBConnection.Open "D:\Weisoft Stock(x64)\traderinfo.mdb"
 		logString("[ 提示: ] 开始时运行，成功打开数据库")
 	else
 		closeConnection()
